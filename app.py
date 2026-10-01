@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import mysql.connector
+import os
 
 # =========================================================
 # PAGE CONFIGURATION
@@ -13,13 +14,10 @@ st.set_page_config(
 )
 
 # =========================================================
-# CUSTOM FUNCTIONS
+# CURRENCY / NUMBER FORMATTING
 # =========================================================
 
 def format_indian_currency(value):
-    """
-    Format large Indian currency values professionally.
-    """
     value = float(value)
 
     if abs(value) >= 10000000:
@@ -49,42 +47,97 @@ st.write(
 
 st.divider()
 
+
 # =========================================================
-# MYSQL CONNECTION
+# LOAD DATA
 # =========================================================
+
+df = None
+data_source = ""
+
+
+# ---------------------------------------------------------
+# FIRST: TRY MYSQL
+# ---------------------------------------------------------
 
 try:
 
-    conn = mysql.connector.connect(
-        host="localhost",
-        user="root",
+    mysql_password = ""
 
-        # ⚠️ KEEP YOUR EXISTING MYSQL PASSWORD HERE
-        password="YOUR_MYSQL_PASSWORD",
-        database="bank_profitability"
-    )
+    # Get password from Streamlit Secrets if available
+    try:
+        mysql_password = st.secrets.get("MYSQL_PASSWORD", "")
+    except Exception:
+        mysql_password = ""
 
-    df = pd.read_sql(
-        "SELECT * FROM bank_customers",
-        conn
-    )
+    # Also allow an environment variable
+    if not mysql_password:
+        mysql_password = os.environ.get("MYSQL_PASSWORD", "")
 
-    conn.close()
+    if mysql_password:
+
+        conn = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password=mysql_password,
+            database="bank_profitability"
+        )
+
+        df = pd.read_sql(
+            "SELECT * FROM bank_customers",
+            conn
+        )
+
+        conn.close()
+
+        data_source = "MySQL"
+
+
+except Exception:
+    df = None
+
+
+# ---------------------------------------------------------
+# SECOND: IF MYSQL IS NOT AVAILABLE, USE CSV
+# ---------------------------------------------------------
+
+if df is None:
+
+    try:
+
+        csv_file = "bank_customer_profitability_clean.csv"
+
+        df = pd.read_csv(csv_file)
+
+        data_source = "CSV Dataset"
+
+    except Exception as e:
+
+        st.error("❌ Could not load project data.")
+
+        st.write(
+            "Make sure bank_customer_profitability_clean.csv "
+            "is present in the project folder."
+        )
+
+        st.code(str(e))
+
+        st.stop()
+
+
+# =========================================================
+# DATA SOURCE INFORMATION
+# =========================================================
+
+if data_source == "MySQL":
 
     st.success("✅ Connected to MySQL successfully!")
 
-except Exception as e:
+else:
 
-    st.error("❌ Could not connect to MySQL.")
-
-    st.write(
-        "Please check that MySQL is running and your password "
-        "inside app.py is correct."
+    st.info(
+        "📊 Dashboard is running using the project CSV dataset."
     )
-
-    st.code(str(e))
-
-    st.stop()
 
 
 # =========================================================
@@ -96,6 +149,7 @@ st.sidebar.header("🔎 Customer Filters")
 st.sidebar.write(
     "Use the filters below to analyze different customer groups."
 )
+
 
 # Customer Segment
 
@@ -591,7 +645,9 @@ st.divider()
 
 st.header("📥 Download Analysis Data")
 
-csv_data = filtered_df.to_csv(index=False).encode("utf-8")
+csv_data = filtered_df.to_csv(
+    index=False
+).encode("utf-8")
 
 
 st.download_button(
@@ -613,12 +669,12 @@ st.header("ℹ️ About This Project")
 
 st.write(
     """
-    **Bank Customer Profitability Analyzer** is a business analytics
+    **Bank Customer Profitability Analyzer** is a Business Analytics
     project designed to analyze customer revenue, cost, profitability,
     loan performance, customer segments and regional performance.
 
-    The project uses a simulated dataset for educational and analytical
-    purposes. The data does not represent real bank customers.
+    The dataset used in this project is simulated/educational data
+    and does not represent real bank customers.
     """
 )
 
