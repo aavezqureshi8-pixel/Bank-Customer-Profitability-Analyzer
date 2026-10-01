@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-import mysql.connector
-import os
+
 
 # =========================================================
 # PAGE CONFIGURATION
@@ -13,6 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # =========================================================
 # CURRENCY / NUMBER FORMATTING
 # =========================================================
@@ -22,10 +22,13 @@ def format_indian_currency(value):
 
     if abs(value) >= 10000000:
         return f"₹{value / 10000000:.2f} Cr"
+
     elif abs(value) >= 100000:
         return f"₹{value / 100000:.2f} Lakh"
+
     elif abs(value) >= 1000:
         return f"₹{value / 1000:.1f}K"
+
     else:
         return f"₹{value:.0f}"
 
@@ -52,92 +55,72 @@ st.divider()
 # LOAD DATA
 # =========================================================
 
-df = None
-data_source = ""
-
-
-# ---------------------------------------------------------
-# FIRST: TRY MYSQL
-# ---------------------------------------------------------
+CSV_FILE = "bank_customer_profitability_clean.csv"
 
 try:
 
-    mysql_password = ""
+    df = pd.read_csv(CSV_FILE)
 
-    # Get password from Streamlit Secrets if available
-    try:
-        mysql_password = st.secrets.get("MYSQL_PASSWORD", "")
-    except Exception:
-        mysql_password = ""
+except Exception as e:
 
-    # Also allow an environment variable
-    if not mysql_password:
-        mysql_password = os.environ.get("MYSQL_PASSWORD", "")
+    st.error("❌ Could not load project data.")
 
-    if mysql_password:
+    st.write(
+        "Make sure the file "
+        "`bank_customer_profitability_clean.csv` "
+        "is present in the GitHub repository."
+    )
 
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password=mysql_password,
-            database="bank_profitability"
-        )
+    st.code(str(e))
 
-        df = pd.read_sql(
-            "SELECT * FROM bank_customers",
-            conn
-        )
-
-        conn.close()
-
-        data_source = "MySQL"
-
-
-except Exception:
-    df = None
-
-
-# ---------------------------------------------------------
-# SECOND: IF MYSQL IS NOT AVAILABLE, USE CSV
-# ---------------------------------------------------------
-
-if df is None:
-
-    try:
-
-        csv_file = "bank_customer_profitability_clean.csv"
-
-        df = pd.read_csv(csv_file)
-
-        data_source = "CSV Dataset"
-
-    except Exception as e:
-
-        st.error("❌ Could not load project data.")
-
-        st.write(
-            "Make sure bank_customer_profitability_clean.csv "
-            "is present in the project folder."
-        )
-
-        st.code(str(e))
-
-        st.stop()
+    st.stop()
 
 
 # =========================================================
 # DATA SOURCE INFORMATION
 # =========================================================
 
-if data_source == "MySQL":
+st.info(
+    "📊 Dashboard is running using the project CSV dataset."
+)
 
-    st.success("✅ Connected to MySQL successfully!")
 
-else:
+# =========================================================
+# DATA VALIDATION
+# =========================================================
 
-    st.info(
-        "📊 Dashboard is running using the project CSV dataset."
-    )
+required_columns = [
+    "Customer_ID",
+    "Age",
+    "Region",
+    "Occupation",
+    "Annual_Income",
+    "Customer_Segment",
+    "Account_Type",
+    "Products_Count",
+    "Loan_Type",
+    "Total_Revenue",
+    "Total_Cost",
+    "Customer_Profit",
+    "Profit_Margin",
+    "Profitability_Category"
+]
+
+missing_columns = [
+    column for column in required_columns
+    if column not in df.columns
+]
+
+if missing_columns:
+
+    st.error("❌ Required columns are missing from the dataset.")
+
+    st.write("Missing columns:")
+
+    for column in missing_columns:
+        st.write(f"- {column}")
+
+    st.stop()
 
 
 # =========================================================
@@ -151,7 +134,9 @@ st.sidebar.write(
 )
 
 
-# Customer Segment
+# ---------------------------------------------------------
+# CUSTOMER SEGMENT
+# ---------------------------------------------------------
 
 segment_options = ["All"] + sorted(
     df["Customer_Segment"]
@@ -166,7 +151,9 @@ selected_segment = st.sidebar.selectbox(
 )
 
 
-# Region
+# ---------------------------------------------------------
+# REGION
+# ---------------------------------------------------------
 
 region_options = ["All"] + sorted(
     df["Region"]
@@ -181,7 +168,9 @@ selected_region = st.sidebar.selectbox(
 )
 
 
-# Loan Type
+# ---------------------------------------------------------
+# LOAN TYPE
+# ---------------------------------------------------------
 
 loan_options = ["All"] + sorted(
     df["Loan_Type"]
@@ -196,7 +185,9 @@ selected_loan = st.sidebar.selectbox(
 )
 
 
-# Profitability Category
+# ---------------------------------------------------------
+# PROFITABILITY CATEGORY
+# ---------------------------------------------------------
 
 profitability_options = ["All"] + sorted(
     df["Profitability_Category"]
@@ -636,6 +627,13 @@ if not top_customers.empty:
     )
 
 
+else:
+
+    st.warning(
+        "No customers match the selected filters."
+    )
+
+
 st.divider()
 
 
@@ -679,7 +677,8 @@ st.write(
 )
 
 st.write(
-    "**Technology Stack:** Python • Pandas • MySQL • Streamlit • Excel • SQL"
+    "**Technology Stack:** "
+    "Python • Pandas • Streamlit • Excel • SQL"
 )
 
 st.success(
